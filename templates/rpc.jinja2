@@ -1,0 +1,15 @@
+# {{ansible_managed}}
+rpcuser={{coinname}}rpc
+rpcpassword={{ lookup('password', 'password/rpc_' + coinname + '_' + ansible_hostname + ' length=20 chars=ascii_letters,digits') }}
+rpcport={{rpcport}}
+server=1
+maxconnections=250
+rpcthreads=5
+blocknotify=/usr/bin/python {{notifier}} {{key}}
+
+{% if port | default(False) %}
+port={{port}}
+{% endif %}
+{% if not payout %}
+disablewallet=1
+{% endif %}

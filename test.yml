@@ -1,0 +1,9 @@
+---
+- hosts: all
+  user: root
+
+  tasks:
+      - command: /home/isaac/bin/parallaxcoind getaddressesbyaccount pool2
+        register: address_info
+      - debug: msg="test"
+        when: address_info.stdout | from_json | length > 0

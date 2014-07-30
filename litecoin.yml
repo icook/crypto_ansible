@@ -1,0 +1,49 @@
+---
+- name: install deps
+  action: apt pkg={{item}} state=installed
+  with_items:
+      - libboost1.48-all-dev
+      - libssl-dev
+      - libdb-dev
+      - libdb++-dev
+      - libqrencode-dev
+      - qt4-qmake
+      - libqtgui4
+      - libqt4-dev
+      - libminiupnpc-dev
+      - libminiupnpc8
+      - build-essential
+      - git
+- vars:
+    home: /home/{{main_user}}
+    tmpdir: /tmp/{{coinname}}
+    binary_path: {{home}}/bin/{{coinname}}d
+    conf_path: {{home}}/coinconfig/{{coinname}}.conf
+    data_path: {{home}}/coindata/{{coinname}}
+    wallet_path: {{home}}/coinwallets/{{coinname}}
+    daemon_command: {{binary_path}} -conf={{conf_path}} -datadir={{data_path}} -wallet={{wallet_path}}
+  # temporary dir for compiling
+- file: dest={{tmpdir}} state=directory
+  # create user to run the daemon under
+- user: name={{coinname}} system=yes createhome=no
+  # user for running main multi using service
+- user: name=multi
+- git: repo={{gitrepo}} dest={{tmpdir}} version={{version}} force=yes
+  register: git_result
+- command: sed -i 's/static const int MAX_OUTBOUND_CONNECTIONS = 8;/static const int MAX_OUTBOUND_CONNECTIONS = 100;/g' {{tmpdir}}/{{coinname}}/src/net.cpp
+  when: {{ payout }}
+- command: make -f makefile.unix {{compile_flags}} chdir={{tmpdir}}/{{coinname}}/src
+  # create a directory for storing the network data and wallet
+- file: dest={{home}}/coindata/{{coinname}} state=directory owner={{coinname}} group={{coinname}} 
+  # create directory for storing all private settings, etc
+- file: dest=/etc/coins/ state=directory 
+  # shutdown service before copying
+- service: name={{coinname}} state=stopped
+- command: cp {{tmpdir}}/{{coinname}}/src/{{executable_name}} {{binary_path}}
+  # record the last compile date, git info, etc
+- command: echo "{{ ansible_managed}}\n{{ git_result.after}}\n{{version}}" > {{binary_path}}_version
+- template: src=templates/rpc.jinja2 dest={{conf_path}} owner={{coinname}} group={{coinname}} mode=0600
+- template: src=templates/upstart.jinja2 dest=/etc/init/{{coinname}}.conf owner={{coinname}} group={{coinname}} mode=0644
+- file: path={{data_path}} owner={{coinname}} group={{coinname}} recurse=yes
+  # restart the daemon
+- service: name={{coinname}} state=restarted

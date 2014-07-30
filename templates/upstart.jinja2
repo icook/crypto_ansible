@@ -1,0 +1,11 @@
+# {{ansible_managed}}
+start on (filesystem)
+stop on runlevel [016]
+
+respawn
+console log
+setuid {{coinname}}
+setgid {{coinname}}
+chdir /home/multi/{{coinname}}/
+
+exec {{daemon_command}}

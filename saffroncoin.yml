@@ -1,0 +1,55 @@
+# For clients based off of Bitcoin 0.9.0
+---
+- hosts: all
+  user: root
+
+  vars:
+    coinname: saffroncoin
+    gitrepo: https://github.com/saffroncoin/saffroncoin.git
+    tmpdir: /tmp/{{coinname}}
+    installdir: /home/multi/{{coinname}}
+    version: master
+    key: SFR
+    notifier: /home/multi/powerpool_multi/notifier.py
+    rpcport: 19710
+    port:
+    # disable wallet is broken for fractalcoin
+    compile_flags: USE_UPNP=0 USE_IPV6=0 USE_QRCODE=0 
+  tasks:
+    - name: install deps
+      action: apt pkg={{item}} state=installed
+      with_items:
+          - libboost1.48-all-dev
+          - libssl-dev
+          - libdb-dev
+          - libdb++-dev
+          - libqrencode-dev
+          - qt4-qmake
+          - libqtgui4
+          - libqt4-dev
+          - libminiupnpc-dev
+          - libminiupnpc8
+            #- libboost-all-dev
+          - build-essential
+          - git
+    - name: temp directory create
+      file: dest={{tmpdir}} state=directory
+    - user: name={{coinname}} system=yes
+    - name: git download {{coinname}}
+      git: repo={{gitrepo}} dest={{tmpdir}}/{{coinname}} version={{version}} force=yes
+    - name: Change outgoing peers to 100
+      command: sed -i 's/static const int MAX_OUTBOUND_CONNECTIONS = 8;/static const int MAX_OUTBOUND_CONNECTIONS = 100;/g' {{tmpdir}}/{{coinname}}/src/net.cpp
+    - name: make {{coinname}}
+      command: make -f makefile.unix {{compile_flags}} chdir={{tmpdir}}/{{coinname}}/src
+    - name: install directory create
+      file: dest={{installdir}}/{{item}} state=directory
+      with_items:
+      - bin
+      - etc
+      - data
+    - name: install {{coinname}}d {{installdir}}/bin/{{coinname}}d
+      command: cp {{tmpdir}}/{{coinname}}/src/{{coinname}}d {{installdir}}/bin/{{coinname}}d
+    - template: src=templates/rpc.conf dest={{installdir}}/etc/{{coinname}}.conf owner={{coinname}} group={{coinname}} mode=0600
+    - template: src=templates/upstart.conf dest=/etc/init/{{coinname}}.conf owner={{coinname}} group={{coinname}} mode=0644
+    - file: path={{installdir}} owner={{coinname}} group={{coinname}} recurse=yes
+    - service: name={{coinname}} state=restarted
